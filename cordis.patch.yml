@@ -28,7 +28,11 @@
   config:
     includeHarnessIdentity: false
     personaPrefix: ""
-    personaSuffix: Your working directory is {{cwd}}.
+    # {{cwd}} 在 0.2.2-rc.5 已不再注册为提示词变量（改由 WORKING_DIRECTORY 上下文承载），
+    # 配置层直接写模板会让整次 assemble 抛 unknown prompt variable。
+    # 工作目录后缀交给运行时 overlayOfficialIdentity：探测到 cwd 已注册才用 {{cwd}}，
+    # 否则回退为不含变量的静态句。
+    personaSuffix: ""
 
 - id: dsh-purge
   inject: [systemPrompt, tools]

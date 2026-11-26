@@ -29,9 +29,7 @@
   <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
 </p>
 
-> **暂停更新。** 作者因工作安排，近期没有稳定收入，项目维护暂时搁置：不再发版、暂不收 issue / PR，也不保证跟进新版 dsh。仓库仍可自用；赞助见下方。恢复维护时会在本 README 说明。
-
-> **官方 Web 和官方桌面端都支持。** 官方 `dsh web` 用 profile `web`；官方桌面 EXE（DeepSeek Harness **0.2.0-rc.2**）用 profile `desktop`。两边分开安装、分开点「应用」。当前版本只适配 dsh 0.2；更早的 dsh 用对应的老版本插件。社区桌面端不维护。
+> **官方 Web 和官方桌面端都支持。** 官方 `dsh web` 用 profile `web`；官方桌面 EXE（DeepSeek Harness **0.2.2-rc.5**）用 profile `desktop`。两边分开安装、分开点「应用」。当前版本适配 dsh 0.2.2-rc.5（同时保留 0.2.0-rc.2 那一档的兼容）；更早的 dsh 用对应的老版本插件。社区桌面端不维护。
 >
 > 写进 profile 还不会改宿主。点会话标题旁的 **dsh-purge** → **清洗** → **应用**。成功会自动重启；补丁没打完不重启。重启后新开一轮对话，注入才进当前会话。
 >
@@ -42,7 +40,6 @@
 - [赞助](#sponsor)
 - [介绍](#介绍)
 - [署名要求](#署名要求)
-- [违规商用公示](#违规商用公示)
 - [适配范围](#适配范围)
 - [安装](#安装)
 - [界面](#界面预览)
@@ -103,26 +100,9 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 
 ---
 
-## 违规商用公示
 
-抖音直播账号 **「老张的ai」**（直播间显示 **「老张AI讲堂」**）把本仓库当收费货卖：直播间问价、当场收钱，不署名，也不守上面的非盈利条款。作者人就在场，对方照收。
 
-本项目免费、非盈利。拿它卖课、卖插件、卖 token、倒卖，许可当场作废，作者保留追究权利。
 
-2026-10-12 直播记录：
-
-<p align="center">
-  <img src="docs/notice/laozhang-live-1.jpg" width="360" alt="老张的ai 直播问价">
-  <img src="docs/notice/laozhang-live-2.jpg" width="360" alt="老张的ai 直播收钱">
-</p>
-
-对方微信名 **「老张的ai科技」**，直播间观众榜同号。被问到是不是本仓库开发者时，自称「老厉害了」；作者当场表示要投诉。
-
-<p align="center">
-  <img src="docs/notice/laozhang-wechat-1.jpg" width="420" alt="老张的ai科技 微信自称开发者">
-</p>
-
----
 
 ### ⚠️ 严正法律免责与合规使用声明
 
@@ -162,28 +142,76 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 
 最新版只支持 **dsh 0.2**，不要拿它去打 0.1.x。
 
-- **dsh 0.2**（官方桌面 **0.2.0-rc.2** / 官方 `dsh web`）：用 **1.1.40** 及以上。本页命令装的就是这一档。
+- **dsh 0.2.2-rc.5**（官方桌面 **0.2.2-rc.5** / 官方 `dsh web`）：用 **1.1.71**（分支 `1.1.71-dsh-v0.2.2-rc.5`）。本页命令装的就是这一档。
+- **dsh 0.2.0-rc.2**（官方桌面 **0.2.0-rc.2** / 官方 `dsh web`）：用 **1.1.40** 及以上（`master` 线）。
 - **dsh 0.1.7**（含 rc.1 / rc.2）：用 **1.1.39** 及更早 —— 在 [Releases](https://github.com/YuJunZhiXue/dsh-purge/releases) 里选对应标签。
 
 对不上的补丁会显示待应用或跳过，不会乱改文件。
+
+### 0.2.2-rc.5 升级注意：`max_tokens` 400
+
+rc.5 把「未描述模型」的输出上限回退值从 `32768` 提到了 `128000`。如果提供方网关的上限只有 65536（例如 SenseNova），发第一句话就会 400：
+
+```
+field MaxTokens invalid, should be in [1, 65536]
+```
+
+这不是补丁打错了，是宿主默认值超过网关上限。在该提供方的配置里显式压一下即可（`$DSH_HOME/profiles/<profile>/cordis.patch.yml`，改完重启 `dsh web`）：
+
+```yaml
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      sensenova:
+        baseURL: https://token.sensenova.cn/v1
+        defaultMaxTokens: 65536   # 或按模型写 maxTokens
+        models: [...]
+```
+
+网关确实支持更大输出时，把这个值调高到对应上限。
+
+### 0.2.2-rc.5 升级注意：红队模式预设挂不上（模式下拉里加载失败）
+
+rc.5 重写了委派那一层，红队预设里三处旧写法会让**整份预设被判 broken**，表现就是模式下拉里点「红队模式」加载失败。启动时看 `$DSH_HOME/redteam/preset-declare.json` 的 `broken` 字段就能确认：
+
+```json
+{
+  "ok": false,
+  "phase": "registered-broken",
+  "broken": "tool-subagent-list-agents (@deepseek-ai/dsh-tool-subagent-control/list-agents): never started\ntool-subagent (@deepseek-ai/dsh-tool-subagent): tool-subagent: toolFilter is no longer supported; ..."
+}
+```
+
+| 旧写法 | rc.5 的变化 | 处理 |
+|---|---|---|
+| 单独挂一行 `@deepseek-ai/dsh-tool-subagent-control/list-agents` | 子路径导出已删除，`list_agents` 并进了 `dsh-tool-subagent-control` 主入口 | 删掉这一行 |
+| `tool-subagent` 的 `toolFilter` / `persona` | `apply()` 里 `Object.hasOwn` 直接 `throw` | 删掉；叶子约束改由 `maxDepth: 1` 保证 |
+| `modelSelectionSettings` / `backgroundMode` | 改名为 `modelSelection` / 整个移除（子会话一律 activation） | 改名 / 删除，否则被静默丢掉，子智能体悄悄失去换模型能力 |
+
+插件在启动时会自动把这些旧写法从**已有**的用户预设里清掉（只改这几处，不整份覆盖），日志里会打「已把 tool-subagent 行换成 0.2.2-rc.5 的写法」。要恢复出厂预设：`REDTEAM_PRESET_REFRESH=1` 启动一次。
+
+### 0.2.2-rc.5 升级注意：新增的 `dsh-harness-dev-context` 会漏身份
+
+rc.5 把「你在用 DeepSeek Harness 的 Web GUI」这类身份句从 `dsh-web-app` 搬进了新包 `dsh-harness-dev-context`，措辞也换了（不再带 URL 变量，改成 "whose URL the runtime context names"），并且额外注册了两条运行时上下文：
+
+```
+Current DeepSeek Harness implementation checkout: "<宿主源码绝对路径>"
+Current DeepSeek Harness Web GUI URL: "<地址>"
+```
+
+静态补丁打不到这个新包，运行时文案清理的旧正则也只认旧措辞。1.1.71 起已在运行时层补上：checkout 那行整条丢弃（等价于 rc.2 的处理），其余只把产品名换成中性说法，功能句保留。自检办法：随便问一句「你是谁」，回答里不该出现 DeepSeek Harness 或宿主源码路径。
 
 ---
 
 ## 安装
 
-现在只维护官方 `dsh web` 和官方桌面 EXE，**两边都要装、分开应用**。Web 的包进不了桌面端，桌面端的包也进不了 Web。
+现在只维护官方 `dsh web` 和官方桌面 EXE，**分开装、分开应用**，只装你正在打开的那一个。
 
-**Web（官方 `dsh web`）**
-
-```sh
-dsh plugin --profile web add dsh-purge
-```
-
-**桌面端（官方 EXE）**
-
-```sh
-dsh plugin --profile desktop add dsh-purge
-```
+| 你正在用 | profile | 命令 |
+|---|---|---|
+| 官方 `dsh web` | `web` | `dsh plugin --profile web add dsh-purge` |
+| 官方桌面 EXE | `desktop` | `dsh plugin --profile desktop add dsh-purge` |
 
 当前目录已经是本仓库时，把包名换成 `add .`。`dsh` 不在 PATH 时走 [手动安装](#manual)。registry 上不去：同一个 `--profile`，把目标换成 `https://github.com/YuJunZhiXue/dsh-purge/archive/refs/heads/master.tar.gz`。
 
@@ -220,23 +248,19 @@ Web 的控件只动 Web，桌面端的只动桌面应用。不要在一个宿主
 
 <!-- AI-AGENT-START -->
 
-安装 DeepSeek Harness 插件 `dsh-purge`，Web 和官方桌面端都要装。不要全盘搜索，不要读或改其它文件，不要应用设置，也不要重启应用。
-
-`dsh` 不在 PATH 就告诉用户后停止。当前目录已是本仓库时，把下面两条里的包名都换成 `.`。npm registry 上不去，把包名换成 `https://github.com/YuJunZhiXue/dsh-purge/archive/refs/heads/master.tar.gz`。某个 profile 不存在就跳过那一条，另一条照装。
+安装 DeepSeek Harness 插件 `dsh-purge`，只装到 Web profile。不要全盘搜索，不要读或改其它文件，不要应用设置，也不要重启应用。不要装到桌面 profile。
 
 **Web 端（官方 `dsh web`）**
+
+`dsh` 不在 PATH 就告诉用户后停止。
 
 ```sh
 dsh plugin --profile web add dsh-purge
 ```
 
-**桌面端（官方 EXE）**
+当前目录已是本仓库时改用 `dsh plugin --profile web add .`。npm registry 上不去再用 `dsh plugin --profile web add https://github.com/YuJunZhiXue/dsh-purge/archive/refs/heads/master.tar.gz`。
 
-```sh
-dsh plugin --profile desktop add dsh-purge
-```
-
-命令结束后，提醒用户：Web 完全退出并重启 `dsh web`；桌面端退出托盘再打开 EXE。各自点会话标题旁的 **dsh-purge**，在「清洗」里点「应用」。然后停止。
+命令结束后，提醒用户：完全退出并重启 `dsh web`，再点会话标题旁的 **dsh-purge**，在「清洗」里点「应用」。然后停止。
 
 <!-- AI-AGENT-END -->
 
@@ -421,7 +445,7 @@ purge_status   purge_apply   purge_revert
 
 设置页「应用」成功后会自动重启，以加载已改的包文件；也可手动点「重启」。补丁标题下有正式版和测试版。测试版跟 `beta` 分支。点「切换到正式版」会装回 master，并清掉钉选。正式版里选旧版本会固定在该版本，要回到最新再点「更新」。旧的测试标签不再列出。
 
-输入框旁的「回退一次」和「回退上一轮」跟官方 DSH `session.fork({ atSeq })`：撤回已进行的那一轮，新会话接上之前的上下文，旧会话归档，那句回到输入框，再发送会重新注入。聊天里 `/rewind` 同样可用。
+输入框旁的「回退一次」和「回退上一轮」都留在当前这条对话里，不另开分支。已发送的那句会回到输入框，这一轮已经发出的内容和已完成的任务会从当前对话撤掉，改字后**重新发送**即可。从 **1.1.61** 起，多轮对话后回退按**当前这一轮**定位，不会又退到第一条用户消息。聊天里 `/rewind` 同样可用。
 
 **极简 / PTC 与标准不一致时**：同一任务在标准模式能跑、在极简或 PTC 被拦，通常是 preset 里 `run_code` 或 plan 拦截句没洗净，或内置 minimal 缺少 `agent-instructions`。请升到 **1.1.61+**，**完全退出宿主 → 清洗里应用 → 自动重启 → 新开一轮对话** 再试；只换 preset 不重应用，旧进程里的补丁不会更新。
 

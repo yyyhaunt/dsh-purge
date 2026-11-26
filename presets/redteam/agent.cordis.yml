@@ -289,12 +289,11 @@
   config:
     # 官方 experimental-agent-team-profile 会在 profile 层 disabled 掉同名行。
     # 红队必须显式 disabled: false，否则只有 spawn_teammate，指挥按 subagent 派活会失败。
+    # 0.2.2-rc.5：`list_agents` / `wait_agent` / `send_message` / `interrupt_agent` 全部并进
+    # dsh-tool-subagent-control 主入口，`.../list-agents` 子路径导出已删除。
+    # 旧写法单独挂一行 `.../list-agents` 会永远 never started，把整个预设判成 broken。
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
-      disabled: false
-
-    - id: tool-subagent-list-agents
-      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
       disabled: false
 
     - id: tool-subagent
@@ -303,21 +302,16 @@
       config:
         provider: spawn
         toolName: subagent
-        modelSelectionSettings: true
-        backgroundMode: continuable
+        # 0.2.2-rc.5：`modelSelectionSettings` 改名为 `modelSelection`，
+        # `backgroundMode` 整个移除（子会话一律 activation，能否续聊由 provider 能力决定）。
+        # 旧键不会报错，只会被静默丢掉 —— 子智能体就悄悄失去换模型的能力。
+        modelSelection: true
         # 子智能体是角色执行者（信息收集/资产梳理/漏洞发现/漏洞利用/内网渗透），**必须是叶子节点**：
-        # 靠提示词劝"不要再往下委派"是软的——模型完全可以无视。这里直接把委派工具从子会话的
-        # 工具目录里摘掉，子智能体连看都看不到 subagent / subagent_fork / workflow / ralph。
-        # maxDepth 同时收成 1 作为二道保险（默认 3 层太深，会白吃并发预算与上下文）。
+        # 靠提示词劝"不要再往下委派"是软的——模型完全可以无视。
+        # 0.2.2-rc.5 起 `toolFilter` 被硬删（apply() 里 Object.hasOwn 直接 throw），
+        # 旧配置会让整行起不来、预设 broken。现在叶子约束只剩 maxDepth 这一道：
+        # 1 表示「只有根会话能派活」，深度 ≥1 的子会话调用 subagent 会被 provider 拒绝。
         maxDepth: 1
-        # 注意：不能 deny `subagent` —— 它是这一行自己注册的 scoped 工具，不在全局工具库里，
-        # 写进 deny 会让 tools.restrict() 校验失败、整个委派路径报 "unknown global tool"（v0.8.0 踩过）。
-        # 子智能体拿不到 subagent_fork/workflow/ralph，加上 maxDepth: 1，实际已无派发能力。
-        toolFilter:
-          deny:
-            - subagent_fork
-            - workflow
-            - ralph
 
     # Fork omits model selection so provider/model stay equal to the parent and
     # the inherited history remains eligible for KV Cache reuse. This preset
@@ -329,7 +323,6 @@
       config:
         provider: fork
         toolName: subagent_fork
-        backgroundMode: continuable
 
     # Production dsh does not install these optional providers. Install the
     # matching Bundle in this Profile and restart the Host, then copy this
@@ -341,7 +334,6 @@
       config:
         provider: codex
         toolName: subagent_codex
-        backgroundMode: one-shot
         maxDepth: provider-managed
 
     - id: tool-subagent-claude-code
@@ -350,7 +342,6 @@
       config:
         provider: claude-code
         toolName: subagent_claude_code
-        backgroundMode: one-shot
         maxDepth: provider-managed
 
     - id: workflow-worker-thread
